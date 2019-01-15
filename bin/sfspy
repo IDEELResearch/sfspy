@@ -1,0 +1,100 @@
+#! /usr/bin/env python3
+
+import os
+import sys
+import argparse
+import logging
+import numpy as np
+
+np.warnings.filterwarnings("ignore")
+
+from sfspy.sfs import Sfs
+from sfspy.util import line_reader, lines_as_integers
+
+def root_help_message():
+	return r"""
+	sfspy <command> [options]
+
+	Commands:
+
+	    summarize         generate a vector of summary statistics (length, pairwise theta, Watterson's theta, Tajima's D)
+	    backfill          fill in the lowest bin (fixed for ancestral allele) given number of callable sites
+
+	Notes:
+	* Spectra are assumed to be UNFOLDED, ie. lowest and highest bin are counts of ancestral and derived allele, respectively.
+	* When weights (ie. callable sites) are provided, they are assumed to correspond 1:1 to the file of input spectra.
+	"""
+
+def calc_summary(log, **kwargs):
+
+	args = argparse.Namespace(**kwargs)
+	if args.callable:
+		callable_iter = line_reader(args.callable)
+
+	if args.sample_sizes is not None:
+		dims = [ _ + 1 for _ in args.sample_sizes ]
+	else:
+		dims = None
+
+	sfs_reader = lines_as_integers(args.infile)
+	ii = 0
+	for values in sfs_reader:
+
+		ii += 1
+		this_sfs = Sfs(values)
+		if dims and not this_sfs.match_dims(dims):
+			raise ValueError("Dims of spectrum {} {} don't match expected {}".format(ii, this_sfs.shape, tuple(dims)))
+
+		if args.callable:
+			try:
+				num_callable = next(callable_iter)
+			except StopIteration as e:
+				raise Exception("Mismatch between SFS and callable-sites files.")
+			denom = int(num_callable.pop(0))
+			this_sfs.set_length(denom)
+
+		ss = this_sfs.big_summary()
+		print(*ss)
+
+parser = argparse.ArgumentParser(
+	description = "Command-line interface for computing over UNFOLDED site frequency spectra.",
+	usage = root_help_message(),
+	add_help = False)
+subparsers = parser.add_subparsers()
+parser.add_argument("-i","--infile",
+					default = "/dev/stdin",
+					help = "site frequency spectra, one per line")
+parser.add_argument("-n","--sample-sizes", nargs = "+", type = int,
+					default = None,
+					help = "expected number of HAPLOID sequences in each spectrum; overrides dimensions in SFS file header, if present [default: sniff header]")
+parser.add_argument("-q","--quiet", action = "store_true",
+					help = "see fewer logging messages")
+parser.add_argument("-v","--verbose", action = "store_true",
+					help = "see more logging messages")
+
+## summary statistics for each input SFS
+summ_parser = subparsers.add_parser("summarize",
+	description = "Generate summary statistics from input SFS.",
+	parents = [parser])
+summ_parser.add_argument("--callable", type = argparse.FileType("rU"),
+						default = None,
+						help = "file with number of callable sites in each spectrum [defualt: None]")
+summ_parser.set_defaults(func = calc_summary, command = "summary")
+
+## parse command line
+args = parser.parse_args()
+
+## set up log trace
+if args.quiet:
+	logging.basicConfig(level = logging.CRITICAL)
+elif args.verbose:
+	logging.basicConfig(level = logging.DEBUG)
+else:
+	logging.basicConfig(level = logging.INFO)
+logging.StreamHandler(stream = sys.stderr)
+logger = logging.getLogger("sfspy")
+logger.debug("Command-line args, as parsed: {}".format(args))
+logger.info("Task: {}".format(args.command))
+
+## dispatch
+args.func(logger, **vars(args))
