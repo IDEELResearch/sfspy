@@ -18,7 +18,7 @@ def root_help_message():
 	Commands:
 
 	    summarize         generate a vector of summary statistics (length, pairwise theta, Watterson's theta, Tajima's D)
-	    backfill          fill in the lowest bin (fixed for ancestral allele) given number of callable sites
+	    backfill          [TODO] fill in the lowest bin (fixed for ancestral allele) given number of callable sites
 
 	Notes:
 	* Spectra are assumed to be UNFOLDED, ie. lowest and highest bin are counts of ancestral and derived allele, respectively.
@@ -41,7 +41,10 @@ def calc_summary(log, **kwargs):
 	for values in sfs_reader:
 
 		ii += 1
+
+		## read SFS from input file
 		this_sfs = Sfs(values)
+		## check dimensions, if
 		if dims and not this_sfs.match_dims(dims):
 			raise ValueError("Dims of spectrum {} {} don't match expected {}".format(ii, this_sfs.shape, tuple(dims)))
 

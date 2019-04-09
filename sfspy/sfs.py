@@ -267,6 +267,7 @@ class Sfs(np.ndarray):
 		"""
 		Make a big vector of 1d and higher-order summary stats, for use with ABC downstream
 		"""
+		self.assume_length()
 		marginals = [ self.marginalize([p]) for p in range(0, self.npops) ]
 		stats = [ self.L ]
 		for m in marginals:
