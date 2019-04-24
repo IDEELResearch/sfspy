@@ -36,7 +36,7 @@ def calc_summary(log, **kwargs):
 	else:
 		dims = None
 
-	sfs_reader = lines_as_integers(args.infile)
+	sfs_reader = lines_as_floats(args.infile)
 	ii = 0
 	for values in sfs_reader:
 
