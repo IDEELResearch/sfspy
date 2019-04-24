@@ -11,7 +11,7 @@ setup(
 	author_email='andrew.parker.morgan@gmail.com',
 	license= "MIT",
 	packages = ["sfspy"],
-	# scripts=["bin/sfspy"],
+	scripts=["bin/sfspy"],
 	install_requires = [
 		"numpy",
 		"scipy"

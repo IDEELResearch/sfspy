@@ -9,7 +9,7 @@ import numpy as np
 np.warnings.filterwarnings("ignore")
 
 from sfspy.sfs import Sfs
-from sfspy.util import line_reader, lines_as_integers
+from sfspy.util import line_reader, lines_as_integers, lines_as_floats
 
 def root_help_message():
 	return r"""
