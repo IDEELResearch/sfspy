@@ -9,7 +9,7 @@ import numpy as np
 np.warnings.filterwarnings("ignore")
 
 from sfspy.sfs import Sfs
-from sfspy.util import line_reader, lines_as_integers, lines_as_floats
+from sfspy.util import line_reader, lines_as_integers, lines_as_floats, lbetabinom
 
 def root_help_message():
 	return r"""
@@ -18,12 +18,23 @@ def root_help_message():
 	Commands:
 
 	    summarize         generate a vector of summary statistics (length, pairwise theta, Watterson's theta, Tajima's D)
+	    boot              generate bootstrap samples from a set of SFS
+	    aggregate         combine SFS from multiple regions by just summing the values in each bin
 	    backfill          [TODO] fill in the lowest bin (fixed for ancestral allele) given number of callable sites
+	    convert           convert between different SFS representations (currently only SoFoS --> ANGSD)
+	    polydfe           make input file for polyDFE from pair of 'neutral' and 'selected' SFS
 
 	Notes:
 	* Spectra are assumed to be UNFOLDED, ie. lowest and highest bin are counts of ancestral and derived allele, respectively.
 	* When weights (ie. callable sites) are provided, they are assumed to correspond 1:1 to the file of input spectra.
 	"""
+
+def read_spectra(infile, dims = None):
+	spectra = []
+	sfs_reader = lines_as_floats(infile)
+	for values in sfs_reader:
+		spectra.append( Sfs(values, dims = dims) )
+	return np.rint(np.vstack(spectra)).astype(np.int)
 
 def calc_summary(log, **kwargs):
 
@@ -57,7 +68,135 @@ def calc_summary(log, **kwargs):
 			this_sfs.set_length(denom)
 
 		ss = this_sfs.big_summary()
-		print(*ss)
+		print(*ss, sep = "\t")
+
+
+def aggregate_sfs(log, **kwargs):
+
+	args = argparse.Namespace(**kwargs)
+
+	if args.sample_sizes is not None:
+		dims = [ _ + 1 for _ in args.sample_sizes ]
+	else:
+		dims = None
+
+	sfs_reader = lines_as_floats(args.infile)
+	all_sfs = None
+	ii = 0
+	for values in sfs_reader:
+
+		ii += 1
+
+		## read SFS from input file
+		this_sfs = Sfs(values, dims = dims)
+		## check dimensions, if
+		if dims and not this_sfs.match_dims(dims):
+			raise ValueError("Dims of spectrum {} {} don't match expected {}".format(ii, this_sfs.shape, tuple(dims)))
+
+		if all_sfs is None:
+			all_sfs = Sfs(this_sfs)
+		else:
+			all_sfs += this_sfs
+
+	print(all_sfs)
+
+
+def boot_sfs(log, **kwargs):
+
+	args = argparse.Namespace(**kwargs)
+	these_sfs = read_spectra(args.infile)
+
+	nspectra = these_sfs.shape[0]
+	for ii in range(0, args.reps):
+		keep = np.random.choice(nspectra, nspectra)
+		for kk in keep:
+			print(*these_sfs[kk,:])
+
+def convert_sfs(log, **kwargs):
+
+	args = argparse.Namespace(**kwargs)
+
+	if args.src == "sofos":
+		with open(args.infile, "r") as infile:
+			for line in infile:
+				if line.startswith("#"):
+					continue
+				else:
+					break
+			_ = next(infile)
+			values = []
+			for sfsline in infile:
+				n, prior, obs, post = sfsline.strip().split(",")
+				values.append( float(post) )
+		these_sfs = [ Sfs(values) ]
+	elif args.src == "angsd":
+		sfs_reader = lines_as_floats(args.infile)
+		ii = 0
+		these_sfs = []
+		for values in sfs_reader:
+			ii += 1
+			## read SFS from input file
+			these_sfs.append( Sfs(values) )
+	else:
+		log.warning("Source format '{}' not supported.".format(args.src))
+		sys.exit(1)
+
+	for sfs in these_sfs:
+		print(sfs)
+
+def make_polydfe(log, **kwargs):
+
+	args = argparse.Namespace(**kwargs)
+
+	neut_sfs = read_spectra(args.neutral)
+	sel_sfs = read_spectra(args.selected)
+
+	if neut_sfs.shape[1] != sel_sfs.shape[1]:
+		sys.exit("Neutral and selected spectra have different number of chromosomes.")
+
+	nchrom = neut_sfs.shape[1]
+	m_neut = neut_sfs.shape[0]
+	L_neut = np.sum(neut_sfs, 1)
+	d_neut = neut_sfs[:,-1:]
+	m_sel = sel_sfs.shape[0]
+	L_sel = np.sum(sel_sfs, 1)
+	d_sel = sel_sfs[:,-1:]
+
+	print(m_neut, m_sel, nchrom)
+	for ii in range(0, m_neut):
+		print(*neut_sfs[ii,0:-1], L_neut[ii], *d_neut[ii], L_neut[ii])
+	for ii in range(0, m_sel):
+		print(*sel_sfs[ii,0:-1], L_sel[ii], *d_sel[ii], L_sel[ii])
+
+def smooth_sfs(log, **kwargs):
+
+	args = argparse.Namespace(**kwargs)
+
+	alpha = args.alpha
+	beta = args.beta
+	n = args.size
+	ns = None
+
+	sfs_reader = lines_as_floats(args.infile)
+	ii = 0
+	for values in sfs_reader:
+
+		ii += 1
+
+		## read SFS from input file
+		this_sfs = Sfs(values)
+		## check dimensions, if
+		if ns is None:
+			ns = this_sfs.pop_sizes[0]
+		elif this_sfs.pop_sizes[0] != ns:
+			raise ValueError("Not all SFS have same size.")
+
+		postgrid = np.zeros( (n+1, ns+1), dtype = np.float )
+		old_dims = np.arange(0, ns+1)
+		for jj in range(0, n+1):
+			postgrid[ jj,: ] = lbetabinom(jj, n, old_dims, ns, alpha, beta)
+		smoothed = np.dot( np.exp(postgrid), this_sfs.T )
+		print(*smoothed.astype(np.int), sep = " ")
 
 parser = argparse.ArgumentParser(
 	description = "Command-line interface for computing over UNFOLDED site frequency spectra.",
@@ -83,6 +222,58 @@ summ_parser.add_argument("--callable", type = argparse.FileType("rU"),
 						default = None,
 						help = "file with number of callable sites in each spectrum [defualt: None]")
 summ_parser.set_defaults(func = calc_summary, command = "summary")
+
+## aggregate across regions
+agg_parser = subparsers.add_parser("aggregate",
+	description = "Aggregate multiple spectra into one, just summing in bins.",
+	parents = [parser])
+agg_parser.set_defaults(func = aggregate_sfs, command = "aggregate")
+
+## aggregate across regions
+agg_parser = subparsers.add_parser("boot",
+	description = "Generate bootstrap samples from a set of SFS.",
+	parents = [parser])
+agg_parser.add_argument("-r","--reps", type = int,
+						default = 1,
+						help = "how many samples to generate [default: %(default)d]")
+agg_parser.set_defaults(func = boot_sfs, command = "boot")
+
+## convert SoFoS to ANGSD
+summ_parser = subparsers.add_parser("convert",
+	description = "Convert other SFS representations to standard 'flattened' form",
+	parents = [parser])
+summ_parser.add_argument("--src", choices = ["sofos"],
+						default = "sofos",
+						help = "source SFS format [default: %(default)d]")
+summ_parser.add_argument("--dest", choices = ["angsd","polydfe"],
+						default = "angsd",
+						help = "source SFS format [default: %(default)d]")
+summ_parser.set_defaults(func = convert_sfs, command = "convert")
+
+## make polyDFE input
+dfe_parser = subparsers.add_parser("polydfe",
+	description = "Convert a 'neutral' and 'selected' SFS pair to input file for polyDFE",
+	parents = [parser])
+dfe_parser.add_argument("--neutral", type = argparse.FileType("rU"),
+						help = "file of one or more SFS from putatively-neutral sites")
+dfe_parser.add_argument("--selected", type = argparse.FileType("rU"),
+						help = "file of one or more SFS from putatively-selected sites")
+dfe_parser.set_defaults(func = make_polydfe, command = "polydfe")
+
+## smooth SFS using SoFoS-like method
+smth_parser = subparsers.add_parser("smooth",
+	description = "Smooth and subsample SFS using beta-binomial model (like SoFoS).",
+	parents = [parser])
+smth_parser.add_argument("-N","--size", type = int,
+						default = 20,
+						help = "downsample to this many chromosomes [default: %(default)d]")
+smth_parser.add_argument("-a","--alpha", type = float,
+						default = 1.0,
+						help = "first shape parameter (alpha) for prior distribution [default: %(default)f]")
+smth_parser.add_argument("-b","--beta", type = float,
+						default = 1.0,
+						help = "second shape parameter (alpha) for prior distribution [default: %(default)f]")
+smth_parser.set_defaults(func = smooth_sfs, command = "smooth")
 
 ## parse command line
 args = parser.parse_args()

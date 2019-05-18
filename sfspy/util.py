@@ -4,6 +4,7 @@ import numpy as np
 
 from re import match as rematch
 from re import sub as resub
+from scipy.special import gammaln as lgamma
 
 def sniff_dims(x):
 	pattern = r"\#+dims\="
@@ -14,7 +15,7 @@ def sniff_dims(x):
 	else:
 		return None
 
-def line_reader(path, comment = "#", fn = None):
+def line_reader(path, comment = "#", fn = None, splitter = None):
 
 	was_file = False
 	if not hasattr(path, "read"):
@@ -33,7 +34,7 @@ def line_reader(path, comment = "#", fn = None):
 				dims = maybe_dims
 			continue
 
-		pieces = line.strip().split()
+		pieces = line.strip().split(splitter)
 		if callable(fn):
 			values = list( map(fn, pieces) )
 		else:
@@ -46,8 +47,15 @@ def line_reader(path, comment = "#", fn = None):
 	if not was_file:
 		infile.close()
 
-def lines_as_floats(infile, comment = "#"):
+def lines_as_floats(infile, comment = "#", splitter = None):
 	return line_reader(infile, comment, float)
 
-def lines_as_integers(infile, comment = "#"):
+def lines_as_integers(infile, comment = "#", splitter = None):
 	return line_reader(infile, comment, int)
+
+def lbetabinom(x, m, k, n, a, b):
+
+	logpost = lgamma(m+1) + lgamma(a+b+n) + lgamma(a+k+x) + lgamma(b+n-k+m-x) - \
+		lgamma(x+1) - lgamma(m-x+1) - lgamma(a+k) - lgamma(b+n-k) - lgamma(a+b+n+m)
+
+	return logpost

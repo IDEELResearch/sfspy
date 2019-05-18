@@ -57,7 +57,7 @@ It may be the case that the SFS includes an accurate count of the number of site
 ```
 
 ## Command-line utilities
-The executable `sfspy` will be installed along with the package. It has a subcommand structure like `samtools` and `bcftools`, although only one command is implemented so far.
+The executable `sfspy` will be installed along with the package. It has a subcommand structure like `samtools` and `bcftools`.
 
 Run `sfspy --help` to see a usage message like this:
 ```
@@ -65,8 +65,12 @@ sfspy <command> [options]
 
 Commands:
 
-	summarize         generate a vector of summary statistics(length, pairwise theta, Watterson's theta, Tajima's D) for each SFS in an input file
+	summarize         generate a vector of summary statistics (length, pairwise theta, Watterson's theta, Tajima's D)
+	boot              generate bootstrap samples from a set of SFS
+	aggregate         combine SFS from multiple regions by just summing the values in each bin
 	backfill          [TODO] fill in the lowest bin (fixed for ancestral allele) given number of callable sites
+	convert           convert between different SFS representations (currently only SoFoS --> ANGSD)
+	polydfe           make input file for polyDFE from pair of 'neutral' and 'selected' SFS
 
 Notes:
 * Spectra are assumed to be UNFOLDED, ie. lowest and highest bin are counts of ancestral and derived allele, respectively.

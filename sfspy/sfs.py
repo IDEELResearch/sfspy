@@ -15,10 +15,15 @@ class Sfs(np.ndarray):
 		# set custom properties
 		obj.L = L
 		obj.npops = len(obj.shape)
+		obj.is_1d = ( len(obj.shape) == 1 )
 		obj.pop_sizes = [ n-1 for n in obj.shape ]
+
 		if repolarize:
 			obj.repolarize()
 		return obj
+
+	def __str__(self):
+		return " ".join( str(_) for _ in self.flatten() )
 
 	def match_dims(self, query_dims):
 		if len(query_dims) != len(self.shape):
