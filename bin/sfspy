@@ -20,6 +20,7 @@ def root_help_message():
 	    summarize         generate a vector of summary statistics (length, pairwise theta, Watterson's theta, Tajima's D)
 	    boot              generate bootstrap samples from a set of SFS
 	    aggregate         combine SFS from multiple regions by just summing the values in each bin
+	    smooth            smooth and subsample SFS using beta-binomial model (like SoFoS).
 	    backfill          [TODO] fill in the lowest bin (fixed for ancestral allele) given number of callable sites
 	    convert           convert between different SFS representations (currently only SoFoS --> ANGSD)
 	    polydfe           make input file for polyDFE from pair of 'neutral' and 'selected' SFS
