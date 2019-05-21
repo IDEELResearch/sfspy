@@ -45,7 +45,9 @@ def calc_summary(log, **kwargs):
 
 	if args.sample_sizes is not None:
 		dims = [ _ + 1 for _ in args.sample_sizes ]
+		log.info("Expecting SFS with dimensions {}".format(args.sample_sizes))
 	else:
+		log.info("Assuming one-dimensional SFS")
 		dims = None
 
 	sfs_reader = lines_as_floats(args.infile)
@@ -59,6 +61,8 @@ def calc_summary(log, **kwargs):
 		## check dimensions, if
 		if dims and not this_sfs.match_dims(dims):
 			raise ValueError("Dims of spectrum {} {} don't match expected {}".format(ii, this_sfs.shape, tuple(dims)))
+		else:
+			this_sfs = Sfs(values, dims = dims)
 
 		if args.callable:
 			try:
@@ -68,9 +72,27 @@ def calc_summary(log, **kwargs):
 			denom = int(num_callable.pop(0))
 			this_sfs.set_length(denom)
 
-		ss = this_sfs.big_summary()
+		ss = this_sfs.big_summary(persite = args.per_site)
 		print(*ss, sep = "\t")
 
+def backfill(log, **kwargs):
+
+	args = argparse.Namespace(**kwargs)
+
+	sfs_reader = lines_as_floats(args.infile)
+	ii = 0
+	for values in sfs_reader:
+
+		ii += 1
+
+		## read SFS from input file
+		this_sfs = Sfs(values)
+
+		extra_sites = args.total_length - np.sum(this_sfs)
+		if extra_sites > 0:
+			this_sfs[0] = extra_sites
+
+		print(this_sfs)
 
 def aggregate_sfs(log, **kwargs):
 
@@ -219,10 +241,24 @@ parser.add_argument("-v","--verbose", action = "store_true",
 summ_parser = subparsers.add_parser("summarize",
 	description = "Generate summary statistics from input SFS.",
 	parents = [parser])
+summ_parser.add_argument("--per-site", action = "store_true",
+						help = "normalize estimates of theta by total number of sites [defualt: raw]")
 summ_parser.add_argument("--callable", type = argparse.FileType("rU"),
 						default = None,
 						help = "file with number of callable sites in each spectrum [defualt: None]")
 summ_parser.set_defaults(func = calc_summary, command = "summary")
+
+## 'backfill' spectra with extra invariant sites
+back_parser = subparsers.add_parser("backfill",
+	description = "Add extra invariant sites to manage ascertainment bias.",
+	parents = [parser])
+back_parser.add_argument("-L", "--total-length", type = int,
+						default = 0,
+						help = "assume each spectrum has this many sites total [default: %(default)d]")
+back_parser.add_argument("--callable", type = argparse.FileType("rU"),
+						default = None,
+						help = "file with number of callable sites in each spectrum [defualt: None]")
+back_parser.set_defaults(func = backfill, command = "backfill")
 
 ## aggregate across regions
 agg_parser = subparsers.add_parser("aggregate",
@@ -230,14 +266,14 @@ agg_parser = subparsers.add_parser("aggregate",
 	parents = [parser])
 agg_parser.set_defaults(func = aggregate_sfs, command = "aggregate")
 
-## aggregate across regions
-agg_parser = subparsers.add_parser("boot",
+## bootstrap samples from file with multiple spectra
+boot_parser = subparsers.add_parser("boot",
 	description = "Generate bootstrap samples from a set of SFS.",
 	parents = [parser])
-agg_parser.add_argument("-r","--reps", type = int,
+boot_parser.add_argument("-r","--reps", type = int,
 						default = 1,
 						help = "how many samples to generate [default: %(default)d]")
-agg_parser.set_defaults(func = boot_sfs, command = "boot")
+boot_parser.set_defaults(func = boot_sfs, command = "boot")
 
 ## convert SoFoS to ANGSD
 summ_parser = subparsers.add_parser("convert",

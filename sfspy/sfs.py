@@ -26,12 +26,15 @@ class Sfs(np.ndarray):
 		return " ".join( str(_) for _ in self.flatten() )
 
 	def match_dims(self, query_dims):
+		flag = True
 		if len(query_dims) != len(self.shape):
-			return False
-		for ii,d in enumerate(self.shape):
-			if query_dims[ii] != d:
-				return False
-		return True
+			if len(self.shape) == 1:
+				flag = np.prod(query_dims) == np.prod(self.shape)
+			else:
+				for ii,d in enumerate(self.shape):
+					if query_dims[ii] != d:
+						flag = False
+		return flag
 
 	def set_length(self, L = None):
 		obs = np.sum(self)
